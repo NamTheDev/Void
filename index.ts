@@ -19,33 +19,39 @@ client.once(Events.ClientReady, (client: Client<true>) => {
     console.log(`Logged in as ${client.user.tag}!`);
 });
 
-const maxViolations = 3;
-var violations = 0;
-
 client.on(Events.MessageCreate, async (message: Message) => {
     if (message.author.bot) return;
 
-    // Delete inappropriate messages
+    const serverRules = [
+        "No swearing",
+        "No NSFW content",
+        "No advertising",
+        "No discrimination",
+        "Only friendly, general and daily topics are allowed"
+    ]
 
     const response = await gemini.ask(message.content, {
-        systemInstruction: "Detect sexual, discrimination, and other offensive topics (exclude unserious and harmless content). Response format:" +
-            [
-                '**Detection**: `<TRUE or FALSE>`',
-                '**Reason**: `<few words>`'
-            ].join('\n')
+        systemInstruction: `
+        You are a Discord moderator.
+        You can warn people.
+        Put everything null if no violation is found.
+        Server rules: ${serverRules.join(", ")}.
+        Your response must trigger a specific Discord.js v14 method.
+        Allowed methods:
+        - message.channel.send
+        - message.delete
+        `,
+        safetySettings: {
+            hate: Gemini.SafetyThreshold.BLOCK_NONE,
+            sexual: Gemini.SafetyThreshold.BLOCK_NONE,
+            harassment: Gemini.SafetyThreshold.BLOCK_NONE,
+            dangerous: Gemini.SafetyThreshold.BLOCK_NONE
+
+        }
     });
 
-    if (response.toUpperCase().includes("TRUE")) {
-        if (violations >= maxViolations) {
-            const member = await message.guild?.members.fetch(message.author.id);
-            await message.delete();
-            return await member?.timeout(60 * 60 * 1000, "Sexual, discrimination, and other offensive topics mentioned in chat.") // 1 hour;
-        }
-        violations = violations + 1;
-        if (message.channel.isSendable())
-            message.channel.send(`Hey, <@${message.author.id}>!\n# You just violated a common sense! (${violations}/${maxViolations})\n${violations === maxViolations ? "## 1 hour timeout for next violation." : ""}\n${response}`);
-        return await message.delete();
-    }
+    const formattedResponse = response.replace('javascript', '').split('```')[1];
+    eval(formattedResponse);
 });
 
 client.login(DISCORD_BOT_TOKEN);
